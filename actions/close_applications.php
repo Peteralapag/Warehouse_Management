@@ -1,0 +1,20 @@
+<?php
+session_start();
+unset($_SESSION["wms_username"]);
+unset($_SESSION["wms_company"]);
+unset($_SESSION["wms_appnameuser"]);
+unset($_SESSION["wms_userlevel"]);
+unset($_SESSION["wms_userrole"]);
+unset($_SESSION["wms_application"]);
+unset($_SESSION["wms_user_recipient"]);
+unset($_SESSION["WMS_REPORT_PAGE"]);
+unset($_SESSION["WMS_RECIPIENT_REPORT"]);
+print_r('
+	<script>
+		sessionStorage.removeItem("module");
+		sessionStorage.removeItem("navwms");
+		sessionStorage.removeItem("page_name");		
+		window.location.reload();
+	</script>
+');
+?>
