@@ -52,14 +52,15 @@ if(isset($_SESSION['WMS_SHOW_LIMIT']))
 <script>
 function selectCategory(category)
 {
-	var limit = '';
 	if(category != '')
 	{
-		$.post("./Modules/Warehouse_Management/includes/itemlist_mapping_data.php", { limit: limit, category: category},
+		$('#limit').prop('disabled', true);
+		$.post("./Modules/Warehouse_Management/includes/itemlist_mapping_data.php", { category: category},
 		function(data) {		
 			$('#smnavdata').html(data);
 		});
 	} else {
+		$('#limit').prop('disabled', false);
 		load_data();
 	}
 }
@@ -106,7 +107,17 @@ function clearSearch()
 function load_data()
 {
 	var limit = $('#limit').val();
+	var category = $('#category').val();
 	rms_reloaderOn("Loading data...");
+	if(category != '')
+	{
+		$.post("./Modules/Warehouse_Management/includes/itemlist_mapping_data.php", { category: category },
+		function(data) {
+			$('#smnavdata').html(data);
+			rms_reloaderOff();
+		});
+		return;
+	}
 	$.post("./Modules/Warehouse_Management/includes/itemlist_mapping_data.php", { limit: limit },
 	function(data) {
 		$('#smnavdata').html(data);
