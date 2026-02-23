@@ -3,6 +3,8 @@ include '../../../init.php';
 $db = new mysqli(DB_HOST, DB_USER, DB_PASSWORD, DB_NAME);
 $rowid = $_POST['rowid'];
 $limit = $_POST['limit'];
+$queryBarcodeDelete = "DELETE FROM wms_itemlist_barcodes WHERE item_id='$rowid' ";
+$db->query($queryBarcodeDelete);
 $queryDataDelete = "DELETE FROM wms_itemlist WHERE id='$rowid' ";
 if ($db->query($queryDataDelete) === TRUE)
 { 

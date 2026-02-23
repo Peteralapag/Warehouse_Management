@@ -4,6 +4,8 @@ $db = new mysqli(DB_HOST, DB_USER, DB_PASSWORD, DB_NAME);
 require_once($_SERVER['DOCUMENT_ROOT']."/Modules/Warehouse_Management/class/Class.functions.php") ;
 $mode = $_POST['params'];
 $function = new WMSFunctions;
+$barcode_list = array();
+$primary_barcode = '';
 if($_POST['params'] == 'edit')
 {
 	$rowid = $_POST['rowid'];
@@ -47,6 +49,30 @@ if($_POST['params'] == 'edit')
 			$item_class_ph = 'Ex: WIP';
 		}
     }
+
+	$barcode_query = "SELECT barcode,is_primary FROM wms_itemlist_barcodes WHERE item_id='$rowid' AND active=1 ORDER BY is_primary DESC,id ASC";
+	$barcode_result = mysqli_query($db, $barcode_query);
+	if ($barcode_result && $barcode_result->num_rows > 0)
+	{
+		while($BARCODEROW = mysqli_fetch_array($barcode_result))
+		{
+			$barcode_value = trim($BARCODEROW['barcode']);
+			if($barcode_value == '')
+			{
+				continue;
+			}
+			$barcode_list[] = $barcode_value;
+			if($BARCODEROW['is_primary'] == 1)
+			{
+				$primary_barcode = $barcode_value;
+			}
+		}
+	}
+	if(count($barcode_list) === 0 && trim($qr_code) != '')
+	{
+		$barcode_list[] = trim($qr_code);
+		$primary_barcode = trim($qr_code);
+	}
 }
 if($_POST['params'] == 'add')
 {
@@ -67,14 +93,54 @@ if($_POST['params'] == 'add')
 	$checked = "";
 	$unit_price = "0.00";
 	$item_class_ph = 'Ex: WIP';
+	$barcode_list = array();
+	$primary_barcode = '';
 }
 ?>
 <style>
-.form-wrapper {width:500px;max-height:500px;overflow-y:auto;}
-.table th {font-size:14px !important;}
+.form-wrapper {width:560px;max-height:65vh;overflow-y:auto;padding-right:4px;}
+.item-form-table {margin-bottom:0;}
+.item-form-table th {
+	font-size:14px !important;
+	font-weight:600;
+	width:145px;
+	padding:6px 8px;
+	vertical-align:middle;
+	line-height:1.2;
+}
+.item-form-table td {
+	padding:4px 6px;
+	vertical-align:middle;
+}
+.item-form-table .form-control,
+.item-form-table .form-control-sm,
+.item-form-table .input-group-text {
+	border-radius:4px;
+}
+.barcode-row .input-group-text {
+	padding:0 8px;
+}
+.barcode-row .btn {
+	min-width:34px;
+	padding:0 10px;
+}
+.barcode-actions {
+	margin-top:4px;
+}
+.results {
+	min-height:20px;
+	font-size:12px;
+	margin-top:6px;
+}
+.form-actions {
+	margin-top:10px;
+	padding-top:8px;
+	border-top:1px solid #dee2e6;
+	text-align:right;
+}
 </style>
 <div class="form-wrapper">	
-	<table style="width: 100%" class="table">
+	<table style="width: 100%" class="table table-borderless item-form-table">
 		<tr>
 			<th>Supplier</th>
 			<td>
@@ -104,13 +170,47 @@ if($_POST['params'] == 'add')
 		<tr>
 			<th>Item Code</th>
 			<td>
-				<input id="item_code" type="tex" class="form-control" value="<?php echo $item_code; ?>">				
+				<input id="item_code" type="text" class="form-control" value="<?php echo $item_code; ?>">				
 			</td>
 		</tr>
 		<tr>
-			<th>QR Code</th>
+			<th>Barcodes</th>
 			<td>
-				<input id="item_code" type="tex" class="form-control" value="<?php echo $qr_code; ?>" placeholder="Leave for now" disabled>
+				<div id="barcode_list">
+					<?php
+					$barcode_rendered = false;
+					foreach($barcode_list as $barcode_value)
+					{
+						$barcode_value = trim($barcode_value);
+						if($barcode_value == '') { continue; }
+						$is_primary = ($primary_barcode != '' && $primary_barcode == $barcode_value) ? 'checked="checked"' : '';
+						$barcode_rendered = true;
+					?>
+					<div class="input-group input-group-sm mb-1 barcode-row">
+						<div class="input-group-prepend">
+							<span class="input-group-text"><input type="radio" class="primary-barcode" name="primary_barcode" <?php echo $is_primary; ?>></span>
+						</div>
+						<input type="text" class="form-control form-control-sm barcode-input" value="<?php echo htmlspecialchars($barcode_value); ?>" placeholder="Enter barcode">
+						<div class="input-group-append">
+							<button class="btn btn-outline-danger btn-sm" type="button" onclick="removeBarcodeRow(this)">X</button>
+						</div>
+					</div>
+					<?php }
+					if($barcode_rendered === false) { ?>
+					<div class="input-group input-group-sm mb-1 barcode-row">
+						<div class="input-group-prepend">
+							<span class="input-group-text"><input type="radio" class="primary-barcode" name="primary_barcode" checked="checked"></span>
+						</div>
+						<input type="text" class="form-control form-control-sm barcode-input" value="" placeholder="Enter barcode">
+						<div class="input-group-append">
+							<button class="btn btn-outline-danger btn-sm" type="button" onclick="removeBarcodeRow(this)">X</button>
+						</div>
+					</div>
+					<?php } ?>
+				</div>
+				<div class="barcode-actions">
+					<button class="btn btn-secondary btn-sm" type="button" onclick="addBarcodeRow('', false)">Add Barcode</button>
+				</div>
 			</td>
 		</tr>
 		<tr>
@@ -166,8 +266,8 @@ if($_POST['params'] == 'add')
 		</tr>
 	</table>
 </div>
-<div class="results" style="font-size:12px;"></div>
-<div style="margin-top:10px;text-align:right">
+<div class="results"></div>
+<div class="form-actions">
 	<?php if($mode == 'add') { ?>
 	<button class="btn btn-primary btn-sm" onclick="validateForm()">Save Supplier</button>
 	<?php } if($mode == 'edit') { ?>
@@ -195,6 +295,48 @@ function deleteItemYes(params)
 		});
 	},1000);
 }
+function addBarcodeRow(value, isPrimary)
+{
+	var safeValue = $('<div>').text(value).html();
+	var checked = isPrimary === true ? 'checked="checked"' : '';
+	var html = ''+
+		'<div class="input-group input-group-sm mb-1 barcode-row">' +
+			'<div class="input-group-prepend">' +
+				'<span class="input-group-text"><input type="radio" class="primary-barcode" name="primary_barcode" '+checked+'></span>' +
+			'</div>' +
+			'<input type="text" class="form-control form-control-sm barcode-input" value="'+safeValue+'" placeholder="Enter barcode">' +
+			'<div class="input-group-append">' +
+				'<button class="btn btn-outline-danger btn-sm" type="button" onclick="removeBarcodeRow(this)">X</button>' +
+			'</div>' +
+		'</div>';
+	$('#barcode_list').append(html);
+	ensurePrimaryBarcode();
+}
+function removeBarcodeRow(button)
+{
+	var rows = $('#barcode_list .barcode-row');
+	if(rows.length <= 1)
+	{
+		rows.find('.barcode-input').val('');
+		rows.find('.primary-barcode').prop('checked', true);
+		return false;
+	}
+	$(button).closest('.barcode-row').remove();
+	ensurePrimaryBarcode();
+}
+function ensurePrimaryBarcode()
+{
+	var rows = $('#barcode_list .barcode-row');
+	if(rows.length === 0)
+	{
+		addBarcodeRow('', true);
+		return;
+	}
+	if(rows.find('.primary-barcode:checked').length === 0)
+	{
+		rows.first().find('.primary-barcode').prop('checked', true);
+	}
+}
 function validateForm()
 {
 	var mode = '<?php echo $mode; ?>';
@@ -205,7 +347,6 @@ function validateForm()
 	var classification = $('#classification').val(); 
 	var item_location = $('#item_location').val();
 	var item_code = $('#item_code').val();
-	var qr_code = $('#qr_code').val();
 	var category = $('#categories').val();
 	var item_description = $('#item_description').val();
 	var uom = $('#uom').val();
@@ -258,6 +399,30 @@ function validateForm()
 		app_alert("Unit Price","Please enter Unit Price","warning","Ok","unit_price","focus");
 		return false;
 	}	
+	var barcodes = [];
+	var primary_barcode = '';
+	$('#barcode_list .barcode-row').each(function()
+	{
+		var barcode_value = $(this).find('.barcode-input').val().trim();
+		if(barcode_value !== '')
+		{
+			barcodes.push(barcode_value);
+			if($(this).find('.primary-barcode').is(":checked"))
+			{
+				primary_barcode = barcode_value;
+			}
+		}
+	});
+	if(barcodes.length === 0)
+	{
+		app_alert("Barcode","Please enter at least one barcode","warning","Ok","","no");
+		return false;
+	}
+	if(primary_barcode === '')
+	{
+		primary_barcode = barcodes[0];
+	}
+	var qr_code = primary_barcode;
 	if($('#active').is(":checked") == true)
 	{
 		var active = 1;
@@ -283,6 +448,8 @@ function validateForm()
 			item_location: item_location,
 			item_code: item_code,
 			qr_code: qr_code,
+			barcodes: barcodes,
+			primary_barcode: primary_barcode,
 			category: category, 
 			classification: classification,
 			item_description: item_description,
@@ -299,5 +466,9 @@ function validateForm()
 		});
 	},1000);
 }
+$(function()
+{
+	ensurePrimaryBarcode();
+});
 </script>
 
