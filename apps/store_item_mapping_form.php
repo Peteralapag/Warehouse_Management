@@ -100,15 +100,16 @@ function saveStoreItemMapping()
 {
 	var itemCode = $('#map_item_code').val();
 	var storeItemId = $('#map_store_item_id').val();
+	var storeItemName = $.trim($('#map_store_item_name').val());
 	if(itemCode === '')
 	{
 		app_alert("Item Code","Invalid Item Code","warning","Ok","","no");
 		return false;
 	}
-	if(storeItemId === '')
+	if(storeItemName === '')
 	{
-		app_alert("Store Item","Please select a Store Item","warning","Ok","map_store_item_id","focus");
-		return false;
+		storeItemId = '';
+		$('#map_store_item_id').val('');
 	}
 	rms_reloaderOn("Saving mapping...");
 	$.post("./Modules/Warehouse_Management/actions/store_item_mapping_process.php", { item_code: itemCode, store_item_id: storeItemId },

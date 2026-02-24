@@ -1,6 +1,16 @@
 <?php
 include '../../../init.php';
 $db = new mysqli(DB_HOST, DB_USER, DB_PASSWORD, DB_NAME);	
+$conversion_table = 'wms_itemlist_conversion';
+$checkConvTable = mysqli_query($db, "SHOW TABLES LIKE 'wms_itemlist_conversion'");
+if(!$checkConvTable || $checkConvTable->num_rows == 0)
+{
+	$checkConvTable2 = mysqli_query($db, "SHOW TABLES LIKE 'wms_itemlist_converssion'");
+	if($checkConvTable2 && $checkConvTable2->num_rows > 0)
+	{
+		$conversion_table = 'wms_itemlist_converssion';
+	}
+}
 if(isset($_POST['category']) AND !isset($_POST['search']))
 {
 	$category = $_POST['category'];
@@ -55,7 +65,7 @@ if(isset($_POST['category']) AND !isset($_POST['search']))
 	</thead>
 	<tbody>
 <?PHP
-	$sqlQuery = "SELECT * FROM wms_itemlist $q";
+	$sqlQuery = "SELECT wi.*, wc.uom_from, wc.uom_to, wc.factor FROM wms_itemlist wi LEFT JOIN $conversion_table wc ON wc.item_id = wi.id $q";
 	$results = mysqli_query($db, $sqlQuery);    
     if ( $results->num_rows > 0 ) 
     {
@@ -64,6 +74,11 @@ if(isset($_POST['category']) AND !isset($_POST['search']))
 		{
 			$sp++;
 			$rowid = $ITEMSROW['id'];
+			$conv_text = '';
+			if(trim((string)$ITEMSROW['uom_from']) != '' && trim((string)$ITEMSROW['uom_to']) != '' && trim((string)$ITEMSROW['factor']) != '')
+			{
+				$conv_text = $ITEMSROW['uom_from'].' => '.$ITEMSROW['uom_to'].' ('.$ITEMSROW['factor'].')';
+			}
 			$item_description = mb_strimwidth($ITEMSROW['item_description'], 0, 40, "...");
 			if($ITEMSROW['active'] == 1)
 			{
@@ -90,7 +105,7 @@ if(isset($_POST['category']) AND !isset($_POST['search']))
 			<td><?php echo $item_description;?></td>			
 			<td style="text-align:right;padding-right:20px;"><?php echo $ITEMSROW['unit_price'];?></td>
 			<td><?php echo $ITEMSROW['uom'];?></td>
-			<td><?php echo $ITEMSROW['conversion'];?></td>
+			<td><?php echo $conv_text;?></td>
 			<td><?php echo $ITEMSROW['added_by'];?></td>
 			<td><?php echo $date_added;?></td>
 			<td style="text-align:center" <?php echo $tdcolor; ?>><?php echo $status;?></td>

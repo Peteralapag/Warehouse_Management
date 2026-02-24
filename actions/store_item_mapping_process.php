@@ -14,7 +14,7 @@ if(isset($_SESSION['wms_appnameuser']))
 }
 $date_time = date("Y-m-d H:i:s");
 
-if($item_code == '' || $store_item_id <= 0)
+if($item_code == '')
 {
 	echo '
 		<script>
@@ -35,6 +35,31 @@ if(!$checkMapTable || $checkMapTable->num_rows == 0)
 	}
 }
 
+if($store_item_id <= 0)
+{
+	$queryDelete = "DELETE FROM $mapping_table WHERE wms_item_code='$item_code'";
+	if($db->query($queryDelete) === TRUE)
+	{
+		echo '
+			<script>
+				swal("Success","Item mapping removed successfully","success");
+				closeModal("formmodal");
+				if(typeof load_data === "function")
+				{
+					load_data();
+				}
+			</script>
+		';
+	} else {
+		echo '
+			<script>
+				swal("Error","Unable to remove mapping. Please try again.","error");
+			</script>
+		';
+	}
+	exit();
+}
+
 $existingCols = array();
 $colRes = mysqli_query($db, "SHOW COLUMNS FROM $mapping_table");
 if($colRes)
@@ -45,8 +70,8 @@ if($colRes)
 	}
 }
 
-$updateDisable = "UPDATE $mapping_table SET status=0 WHERE wms_item_code='$item_code'";
-$db->query($updateDisable);
+$deletePrevious = "DELETE FROM $mapping_table WHERE wms_item_code='$item_code'";
+$db->query($deletePrevious);
 
 $insertCols = array();
 $insertVals = array();
@@ -83,6 +108,9 @@ if($assignedRes && $assignedRes->num_rows > 0)
 		exit();
 	}
 }
+
+$cleanupInactive = "DELETE FROM $mapping_table WHERE store_item_id='$store_item_id' AND status=0";
+$db->query($cleanupInactive);
 
 $queryInsert = "INSERT INTO $mapping_table (".implode(',', $insertCols).") VALUES (".implode(',', $insertVals).")";
 try

@@ -2,10 +2,22 @@
 include '../../../init.php';
 $db = new mysqli(DB_HOST, DB_USER, DB_PASSWORD, DB_NAME);
 require_once($_SERVER['DOCUMENT_ROOT']."/Modules/Warehouse_Management/class/Class.functions.php") ;
+$conversion_table = 'wms_itemlist_conversion';
+$checkConvTable = mysqli_query($db, "SHOW TABLES LIKE 'wms_itemlist_conversion'");
+if(!$checkConvTable || $checkConvTable->num_rows == 0)
+{
+	$checkConvTable2 = mysqli_query($db, "SHOW TABLES LIKE 'wms_itemlist_converssion'");
+	if($checkConvTable2 && $checkConvTable2->num_rows > 0)
+	{
+		$conversion_table = 'wms_itemlist_converssion';
+	}
+}
 $mode = $_POST['params'];
 $function = new WMSFunctions;
 $barcode_list = array();
 $primary_barcode = '';
+$conv_uom_to = '';
+$conv_factor = '';
 if($_POST['params'] == 'edit')
 {
 	$rowid = $_POST['rowid'];
@@ -26,7 +38,6 @@ if($_POST['params'] == 'edit')
 			$item_description = $ROW['item_description'];
 			$unit_price = $ROW['unit_price'];
 			$uom = $ROW['uom'];
-			$conversion = $ROW['conversion'];
 			$added_by = $ROW['added_by'];
 			$date_added = $ROW['date_added'];
 			$active = $ROW['active'];
@@ -73,6 +84,15 @@ if($_POST['params'] == 'edit')
 		$barcode_list[] = trim($qr_code);
 		$primary_barcode = trim($qr_code);
 	}
+
+	$convQuery = "SELECT uom_from,uom_to,factor FROM $conversion_table WHERE item_id='$rowid' ORDER BY id DESC LIMIT 1";
+	$convResult = mysqli_query($db, $convQuery);
+	if($convResult && $convResult->num_rows > 0)
+	{
+		$convRow = mysqli_fetch_assoc($convResult);
+		$conv_uom_to = trim($convRow['uom_to']);
+		$conv_factor = $convRow['factor'];
+	}
 }
 if($_POST['params'] == 'add')
 {
@@ -86,7 +106,6 @@ if($_POST['params'] == 'add')
 	$class =  "";
 	$item_description =  "";
 	$uom =  "";
-	$conversion =  "";
 	$added_by =  "";
 	$date_added =  "";
 	$active =  "";
@@ -95,6 +114,8 @@ if($_POST['params'] == 'add')
 	$item_class_ph = 'Ex: WIP';
 	$barcode_list = array();
 	$primary_barcode = '';
+	$conv_uom_to = '';
+	$conv_factor = '';
 }
 ?>
 <style>
@@ -214,7 +235,7 @@ if($_POST['params'] == 'add')
 			</td>
 		</tr>
 		<tr>
-			<th>Category</th>
+			<th>Categorysss</th>
 			<td>
 				<select id="categories" class="form-control">
 					<?php echo $function->GetItemCategory($category,$db)?>
@@ -238,8 +259,16 @@ if($_POST['params'] == 'add')
 			</td>
 		</tr>
 		<tr>
-			<th>Conversion</th>
-			<td><input id="conversion" type="text" class="form-control" value="<?php echo $conversion; ?>"></td>
+			<th>Conv. UOM To</th>
+			<td>
+				<select id="conv_uom_to" class="form-control">
+					<?php echo $function->GetUOM($conv_uom_to,$db)?>
+				</select>
+			</td>
+		</tr>
+		<tr>
+			<th>Conv. Factor/Value</th>
+			<td><input id="conv_factor" type="number" step="0.0001" min="0" class="form-control" value="<?php echo htmlspecialchars($conv_factor, ENT_QUOTES); ?>" placeholder="Ex: 12"></td>
 		</tr>
 		<tr>
 			<th>Unit Price</th>
@@ -350,7 +379,8 @@ function validateForm()
 	var category = $('#categories').val();
 	var item_description = $('#item_description').val();
 	var uom = $('#uom').val();
-	var conversion = $('#conversion').val();
+	var conv_uom_to = $.trim($('#conv_uom_to').val());
+	var conv_factor = $.trim($('#conv_factor').val());
 	var unit_price = $('#unit_price').val();
 	var active = $('#active').val();
 /*	if(supplier === '')
@@ -399,6 +429,20 @@ function validateForm()
 		app_alert("Unit Price","Please enter Unit Price","warning","Ok","unit_price","focus");
 		return false;
 	}	
+	var convHasAnyValue = (conv_uom_to !== '' || conv_factor !== '');
+	if(convHasAnyValue)
+	{
+		if(conv_uom_to === '')
+		{
+			app_alert("Conversion","Please enter Conversion UOM To","warning","Ok","conv_uom_to","focus");
+			return false;
+		}
+		if(conv_factor === '' || parseFloat(conv_factor) <= 0)
+		{
+			app_alert("Conversion","Please enter valid Conversion Factor","warning","Ok","conv_factor","focus");
+			return false;
+		}
+	}
 	var barcodes = [];
 	var primary_barcode = '';
 	$('#barcode_list .barcode-row').each(function()
@@ -413,11 +457,6 @@ function validateForm()
 			}
 		}
 	});
-	if(barcodes.length === 0)
-	{
-		app_alert("Barcode","Please enter at least one barcode","warning","Ok","","no");
-		return false;
-	}
 	if(primary_barcode === '')
 	{
 		primary_barcode = barcodes[0];
@@ -454,7 +493,8 @@ function validateForm()
 			classification: classification,
 			item_description: item_description,
 			uom: uom,
-			conversion : conversion,
+			conv_uom_to: conv_uom_to,
+			conv_factor: conv_factor,
 			unit_price: unit_price,
 			active : active, 
 			limit: limit,
