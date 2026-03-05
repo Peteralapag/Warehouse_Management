@@ -231,7 +231,7 @@ document.getElementById('save-gr').addEventListener('click', function() {
         dangerMode: true,
     }).then((willReceive) => {
         if (willReceive) {
-            fetch('./Modules/Property_Custodian_System/actions/save_goods_received.php', {
+            fetch('./Modules/Warehouse_Management/actions/save_goods_received.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ po_id: <?= json_encode($rowid) ?>, items: data, remarks })
@@ -245,6 +245,9 @@ document.getElementById('save-gr').addEventListener('click', function() {
                 } else {
                     swal("Error", res.message, "error");
                 }
+            })
+            .catch(() => {
+                swal("Error", "Unable to save goods received. Please check module path/API response.", "error");
             });
         } else {
             swal("Cancelled","Receiving not saved","info");
@@ -256,7 +259,7 @@ document.getElementById('save-gr').addEventListener('click', function() {
 
 function viewgr(rowid, ponumber){
 
-	$.post("./Modules/Property_Custodian_System/includes/goods_received_view.php", { rowid: rowid, ponumber: ponumber },
+    $.post("./Modules/Warehouse_Management/includes/goods_received_view.php", { rowid: rowid, ponumber: ponumber },
 	function(data) {
 		$('#contents').html(data);
 	});

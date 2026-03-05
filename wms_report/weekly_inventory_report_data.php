@@ -8,10 +8,10 @@ $inventory = new WMSInventory;
 $_SESSION['WMS_MONTH'] = $_POST['month'];
 $_SESSION['WMS_YEAR'] = $_POST['year'];
 $_SESSION['WMS_WEEK'] = $_POST['week'];
-$recipient = $_POST['recipient'];
-$year = $_POST['year']; 
-$month = $_POST['month']; 
-$week = $_POST['week'];
+$recipient = $db->real_escape_string($_POST['recipient']);
+$year = (int)$_POST['year']; 
+$month = (int)$_POST['month']; 
+$week = (int)$_POST['week'];
 $month_name = date("F", strtotime($year."-".$month));
 if($week == 1)
 {
@@ -62,6 +62,17 @@ if($week != 0)
 	$col = '*';
 }
 	$q = "WHERE recipient='$recipient' AND month='$month' AND year='$year'";
+
+$startDate = sprintf("%04d-%02d-%02d", $year, $month, $cnt_start);
+$endDate = sprintf("%04d-%02d-%02d", $year, $month, $cnt_end);
+$prevMonthStart = date('Y-m-01', strtotime($startDate . ' -1 month'));
+$prevMonthEnd = date('Y-m-t', strtotime($startDate . ' -1 month'));
+
+$itemCodes = [];
+$inventoryRecords = [];
+$weeklyInData = [];
+$beginningData = [];
+$pcountData = [];
 ?>
 <style>
 .table td, .table th {border: 1px solid #232323 !important;}
@@ -108,6 +119,70 @@ if($week != 0)
 <?php
 	$sqlQuery = "SELECT * FROM wms_itemlist WHERE recipient='$recipient'";
 	$results = mysqli_query($db, $sqlQuery);
+	if ($results && $results->num_rows > 0) {
+		while ($row = $results->fetch_assoc()) {
+			$itemCodes[] = $row['item_code'];
+		}
+		mysqli_data_seek($results, 0);
+
+		if (!empty($itemCodes)) {
+			$itemCodesList = "'" . implode("','", array_map([$db, 'real_escape_string'], $itemCodes)) . "'";
+
+			$sqlIR = "SELECT * FROM wms_inventory_records WHERE item_code IN ($itemCodesList) AND month='$month' AND year='$year'";
+			$irResult = mysqli_query($db, $sqlIR);
+			if ($irResult) {
+				while ($row = $irResult->fetch_assoc()) {
+					$inventoryRecords[$row['item_code']] = $row;
+				}
+			}
+
+			$sqlWeeklyIn = "
+				SELECT item_code, SUM(quantity_received) AS total_received
+				FROM wms_receiving_details
+				WHERE received_date BETWEEN '$startDate' AND '$endDate'
+				  AND item_code IN ($itemCodesList)
+				GROUP BY item_code
+			";
+			$weeklyInResult = mysqli_query($db, $sqlWeeklyIn);
+			if ($weeklyInResult) {
+				while ($row = $weeklyInResult->fetch_assoc()) {
+					$weeklyInData[$row['item_code']] = (float)$row['total_received'];
+				}
+			}
+
+			$sqlBeginning = "
+				SELECT p.item_code, p.p_count
+				FROM wms_inventory_pcount p
+				INNER JOIN (
+					SELECT item_code, MAX(trans_date) AS max_trans_date
+					FROM wms_inventory_pcount
+					WHERE trans_date BETWEEN '$prevMonthStart' AND '$prevMonthEnd'
+					  AND item_code IN ($itemCodesList)
+					GROUP BY item_code
+				) x ON x.item_code = p.item_code AND x.max_trans_date = p.trans_date
+			";
+			$beginningResult = mysqli_query($db, $sqlBeginning);
+			if ($beginningResult) {
+				while ($row = $beginningResult->fetch_assoc()) {
+					$beginningData[$row['item_code']] = (float)$row['p_count'];
+				}
+			}
+
+			$sqlPcount = "
+				SELECT item_code, SUM(p_count) AS total_pcount
+				FROM wms_inventory_pcount
+				WHERE trans_date BETWEEN '$startDate' AND '$endDate'
+				  AND item_code IN ($itemCodesList)
+				GROUP BY item_code
+			";
+			$pcountResult = mysqli_query($db, $sqlPcount);
+			if ($pcountResult) {
+				while ($row = $pcountResult->fetch_assoc()) {
+					$pcountData[$row['item_code']] = (float)$row['total_pcount'];
+				}
+			}
+		}
+	}
 	if ($results->num_rows > 0) {
     $i = 0;
     $variance_amount_total=0;
@@ -118,8 +193,8 @@ if($week != 0)
     {
 	    $i++;
 	    $itemcode = $INVROW['item_code'];
-	    $weekly_delivery = $inventory->getWeeklyIn($cnt_start,$cnt_end,$days_cnt,$itemcode,$month,$year,$db);		
-	    $beginning = $inventory->getInventoryBeginning($cnt_start,$cnt_end,$days_cnt,$col,$itemcode,$month,$year,$db);	   	    
+	    $weekly_delivery = $weeklyInData[$itemcode] ?? 0;
+	    $beginning = $beginningData[$itemcode] ?? 0;	   	    
 	    $total_inv = ($weekly_delivery + $beginning);
 ?>	
 		<tr>
@@ -132,34 +207,31 @@ if($week != 0)
 			<td style="text-align:right"><?php echo number_format($total_inv,2); ?></td>
 		<?php
 			$total=0;
-			$sqlQueryIR = "SELECT * FROM wms_inventory_records WHERE item_code='$itemcode' AND month='$month' AND year='$year'";
-			$irResults = mysqli_query($db, $sqlQueryIR);
-			if (mysqli_num_rows($irResults) > 0) {
-			    while ($IRVROW = mysqli_fetch_array($irResults))
-			    {
-		          	for ($x = $cnt_start; $x < $cnt_start + $days_cnt; $x++)
-		            {
+			if (isset($inventoryRecords[$itemcode])) {
+				$IRVROW = $inventoryRecords[$itemcode];
+				for ($x = $cnt_start; $x < $cnt_start + $days_cnt; $x++)
+				{
 
-				        $td = str_pad($x, 2, '0', STR_PAD_LEFT);
-				        $day = $IRVROW['day_' . $td];
-				        if($day > 0)
-				        {
-				        	echo '<td style="text-align:center;width:50px;color:blue !important">' . $day . '</td>';
-				        } else {
-					        	echo '<td style="text-align:center;width:50px">--</td>';
-				        }
-				        $total += $day;
-				    }
-		        }
-		     } else {
+					$td = str_pad($x, 2, '0', STR_PAD_LEFT);
+					$day = $IRVROW['day_' . $td] ?? 0;
+					if($day > 0)
+					{
+						echo '<td style="text-align:center;width:50px;color:blue !important">' . $day . '</td>';
+					} else {
+						echo '<td style="text-align:center;width:50px">--</td>';
+					}
+					$total += $day;
+				}
+			} else {
 			    for ($x = $cnt_start; $x <= $cnt_end; $x++) {
 			        echo '<td style="text-align:center;width:50px">--</td>';
 			    }
 			}
             $expected_stocks = ($total_inv - $total);
-            $pcount = $inventory->GetWeeklyPcount($cnt_start,$cnt_end,$days_cnt,$itemcode,$month,$year,$db);
+            $pcount = $pcountData[$itemcode] ?? 0;
             $variances = ($pcount - $expected_stocks);
-            $variance_amount = ($function->GetUnitPrice($itemcode,$db) * $variances);
+            $unit_price = (float)($INVROW['unit_price'] ?? 0);
+            $variance_amount = ($unit_price * $variances);
             $shortages = ($variance_amount < 0) ? $variance_amount : 0;
             $overages = ($variance_amount > 0) ? $variance_amount : 0;
 
@@ -169,7 +241,7 @@ if($week != 0)
 			<td style="text-align:right"><?php echo number_format($expected_stocks,2); ?></td>
 			<td style="text-align:right"><?php echo number_format($pcount,2); ?></td>
 			<td style="text-align:right"><?php echo number_format($variances,2); ?></td>
-			<td style="text-align:right"><?php echo $function->GetUnitPrice($itemcode,$db); ?></td>
+			<td style="text-align:right"><?php echo number_format($unit_price,2); ?></td>
 			<td style="text-align:right"><?php echo number_format($variance_amount,2); ?></td>
 			<td style="text-align:right"><?php echo number_format($shortages,2); ?></td>
 			<td style="text-align:right"><?php echo number_format($overages,2); ?></td>

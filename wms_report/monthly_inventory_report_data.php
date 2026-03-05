@@ -78,6 +78,14 @@ if ($results && $results->num_rows > 0) {
 
     // Get all inventory records in one query if we have items
     if (!empty($itemCodes)) {
+        $monthPadded = str_pad((int)$month, 2, '0', STR_PAD_LEFT);
+        $currentStart = sprintf("%04d-%02d-01", (int)$year, (int)$monthPadded);
+        $currentEnd = date('Y-m-t', strtotime($currentStart));
+        $prevStart = date('Y-m-01', strtotime($currentStart . ' -1 month'));
+        $prevEnd = date('Y-m-t', strtotime($currentStart . ' -1 month'));
+        $rangeStart = sprintf("%04d-%02d-%02d", (int)$year, (int)$monthPadded, (int)$cnt_start);
+        $rangeEnd = sprintf("%04d-%02d-%02d", (int)$year, (int)$monthPadded, (int)$cnt_end);
+
         $itemCodesList = "'" . implode("','", array_map([$db, 'real_escape_string'], $itemCodes)) . "'";
         $sqlIR = "SELECT * FROM wms_inventory_records WHERE item_code IN ($itemCodesList) AND month='$month' AND year='$year'";
         $irResult = mysqli_query($db, $sqlIR);
@@ -88,14 +96,75 @@ if ($results && $results->num_rows > 0) {
             }
         }
 
-        // Pre-fetch monthly in data for all items
-        foreach ($itemCodes as $code) {
-            for ($wk = 1; $wk <= 5; $wk++) {
-                $monthlyInData[$code][$wk] = $inventory->getMonthlyIn($wk, $code, $month, $year, $db);
+        $sqlMonthlyIn = "
+            SELECT
+                details.item_code,
+                SUM(CASE WHEN DAY(details.received_date) BETWEEN 1 AND 7 THEN details.quantity_received ELSE 0 END) AS wk1,
+                SUM(CASE WHEN DAY(details.received_date) BETWEEN 8 AND 14 THEN details.quantity_received ELSE 0 END) AS wk2,
+                SUM(CASE WHEN DAY(details.received_date) BETWEEN 15 AND 21 THEN details.quantity_received ELSE 0 END) AS wk3,
+                SUM(CASE WHEN DAY(details.received_date) BETWEEN 22 AND 28 THEN details.quantity_received ELSE 0 END) AS wk4,
+                SUM(CASE WHEN DAY(details.received_date) BETWEEN 29 AND 31 THEN details.quantity_received ELSE 0 END) AS wk5
+            FROM wms_receiving_details details
+            INNER JOIN wms_receiving receiving ON receiving.receiving_id = details.receiving_id
+            WHERE details.received_date BETWEEN '$currentStart' AND '$currentEnd'
+              AND receiving.status = 'Closed'
+              AND details.item_code IN ($itemCodesList)
+            GROUP BY details.item_code
+        ";
+        $monthlyInResult = mysqli_query($db, $sqlMonthlyIn);
+        if ($monthlyInResult) {
+            while ($row = $monthlyInResult->fetch_assoc()) {
+                $code = $row['item_code'];
+                $monthlyInData[$code][1] = (float)$row['wk1'];
+                $monthlyInData[$code][2] = (float)$row['wk2'];
+                $monthlyInData[$code][3] = (float)$row['wk3'];
+                $monthlyInData[$code][4] = (float)$row['wk4'];
+                $monthlyInData[$code][5] = (float)$row['wk5'];
             }
-            $beginningData[$code] = $inventory->getInventoryBeginning($cnt_start, $cnt_end, $days_cnt, $col, $code, $month, $year, $db);
-            $pcountData[$code] = $inventory->GetMonthlyPcount($cnt_start, $cnt_end, $days_cnt, $code, $month, $year, $db);
-            $unitPriceData[$code] = $function->GetUnitPriceRecords($code, $year, $month, $db);
+        }
+
+        $sqlBeginning = "
+            SELECT p.item_code, p.p_count
+            FROM wms_inventory_pcount p
+            INNER JOIN (
+                SELECT item_code, MAX(trans_date) AS max_trans_date
+                FROM wms_inventory_pcount
+                WHERE trans_date BETWEEN '$prevStart' AND '$prevEnd'
+                  AND item_code IN ($itemCodesList)
+                GROUP BY item_code
+            ) x ON x.item_code = p.item_code AND x.max_trans_date = p.trans_date
+        ";
+        $beginningResult = mysqli_query($db, $sqlBeginning);
+        if ($beginningResult) {
+            while ($row = $beginningResult->fetch_assoc()) {
+                $beginningData[$row['item_code']] = (float)$row['p_count'];
+            }
+        }
+
+        $sqlPcount = "
+            SELECT p.item_code, p.p_count
+            FROM wms_inventory_pcount p
+            INNER JOIN (
+                SELECT item_code, MAX(trans_date) AS max_trans_date
+                FROM wms_inventory_pcount
+                WHERE trans_date BETWEEN '$rangeStart' AND '$rangeEnd'
+                  AND item_code IN ($itemCodesList)
+                GROUP BY item_code
+            ) x ON x.item_code = p.item_code AND x.max_trans_date = p.trans_date
+        ";
+        $pcountResult = mysqli_query($db, $sqlPcount);
+        if ($pcountResult) {
+            while ($row = $pcountResult->fetch_assoc()) {
+                $pcountData[$row['item_code']] = (float)$row['p_count'];
+            }
+        }
+
+        $sqlUnitPrice = "SELECT item_code, unit_price FROM wms_inventory_records WHERE item_code IN ($itemCodesList) AND month='$month' AND year='$year'";
+        $unitPriceResult = mysqli_query($db, $sqlUnitPrice);
+        if ($unitPriceResult) {
+            while ($row = $unitPriceResult->fetch_assoc()) {
+                $unitPriceData[$row['item_code']] = (float)$row['unit_price'];
+            }
         }
     }
 }

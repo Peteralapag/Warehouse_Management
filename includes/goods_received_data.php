@@ -28,7 +28,14 @@ FROM purchase_orders po
 JOIN purchase_order_items poi ON po.id = poi.po_id
 JOIN suppliers s ON po.supplier_id = s.id
 LEFT JOIN (
-    SELECT po_item_id, SUM(received_qty) AS received_sum
+    SELECT 
+        po_item_id,
+        SUM(
+            CASE
+                WHEN accepted_qty IS NULL AND rejected_qty IS NULL THEN IFNULL(received_qty, 0)
+                ELSE IFNULL(accepted_qty, 0) + IFNULL(rejected_qty, 0)
+            END
+        ) AS received_sum
     FROM purchase_receipt_items
     GROUP BY po_item_id
 ) pri ON pri.po_item_id = poi.id
@@ -80,7 +87,7 @@ $i = 1;
 while($row = $result->fetch_assoc()): 
 
     // Update status permanently if balance = 0
-    if(floatval($row['balance']) <= 0 && $row['status'] !== 'received'){
+    if(floatval($row['balance']) <= 0 && strtolower((string)$row['status']) !== 'received'){
         $stmt_update = $db->prepare("UPDATE purchase_orders SET status='received', updated_at=NOW() WHERE id=?");
         $stmt_update->bind_param("i", $row['id']);
         $stmt_update->execute();

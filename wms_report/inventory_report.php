@@ -6,7 +6,7 @@ $function = new WMSFunctions;
 $_SESSION['WMS_REPORT_PAGE'] = $_POST['reports'];
 $_SESSION['WMS_RECIPIENT_REPORT'] = $_POST['recipient'];
 $_SESSION['WMS_BRANCH_REPORT'] = $_POST['branch'];
-if(isset($_SESSION['WMS_YEARS']))
+if(isset($_SESSION['WMS_YEAR']))
 {
 	$year = $_SESSION['WMS_YEAR'];
 } else {
@@ -45,7 +45,7 @@ background: #fff;min-width:600px;overflow-x:auto;}
 	<select id="week" class="form-control form-control-sm" style="width:130px">
 		<?php echo $function->GetWeekOfMonth($week); ?>
 	</select>
-	<button id="searchbtn" class="btn btn-danger btn-sm" onclick="loadReport()">Load Data&nbsp;&nbsp;<i class="fa-solid fa-arrow-down"></i></button>
+	<button id="loadbtn" class="btn btn-danger btn-sm" onclick="loadReport()">Load Data&nbsp;&nbsp;<i class="fa-solid fa-arrow-down"></i></button>
 	<input type="text" id="searchitem" class="form-control form-control-sm" style="width:200px;margin-left:10px" placeholder="Search Item/Code" autocomplete="nonono">
 	<button id="searchbtn" class="btn btn-info btn-sm color-white" onclick="searchItem()">Search</button>
 	<span style="margin-left:auto">
@@ -119,14 +119,11 @@ function loadReport()
 		var page = 'weekly_inventory_report_data.php';
 	}
 	rms_reloaderOn('Loading');
-	setTimeout(function()
-	{
-		$.post("./Modules/Warehouse_Management/wms_report/" + page, { recipient: recipient, year: year, month: month, week: week },
-		function(data) {		
-			$('#iwd').html(data);
-			rms_reloaderOff();
-		});
-	},500);
+	$.post("./Modules/Warehouse_Management/wms_report/" + page, { recipient: recipient, year: year, month: month, week: week },
+	function(data) {		
+		$('#iwd').html(data);
+		rms_reloaderOff();
+	});
 }
 </script>
 

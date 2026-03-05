@@ -1,22 +1,50 @@
 <?php
 include '../../../init.php';
+header('Content-Type: application/json; charset=utf-8');
+
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    http_response_code(405);
+    echo json_encode(['status' => 'error', 'message' => 'Method not allowed']);
+    exit;
+}
+
 $db = new mysqli(DB_HOST, DB_USER, DB_PASSWORD, DB_NAME);
+$db->set_charset('utf8mb4');
+
+if ($db->connect_errno) {
+    http_response_code(500);
+    echo json_encode(['status' => 'error', 'message' => 'Database connection failed']);
+    exit;
+}
 
 $approver = $_SESSION['wms_appnameuser'] ?? '';
 $branch   = 'WAREHOUSE';
 
+if ($approver === '') {
+    http_response_code(401);
+    echo json_encode(['status' => 'error', 'message' => 'Unauthorized session']);
+    exit;
+}
+
 $input = json_decode(file_get_contents('php://input'), true);
-$po_id   = $input['po_id'] ?? '';
-$items   = $input['items'] ?? [];
+$po_id   = isset($input['po_id']) ? (int)$input['po_id'] : 0;
+$items   = $input['items'] ?? null;
 $remarks = trim($input['remarks'] ?? ''); // <-- single remark
 
-if (empty($po_id) || empty($items)) {
+if (!is_array($input) || json_last_error() !== JSON_ERROR_NONE) {
+    http_response_code(400);
+    echo json_encode(['status' => 'error', 'message' => 'Invalid JSON payload']);
+    exit;
+}
+
+if ($po_id <= 0 || !is_array($items) || count($items) === 0) {
+    http_response_code(400);
     echo json_encode(['status'=>'error','message'=>'No items to receive']);
     exit;
 }
 
-// âœ… Ensure remarks is provided
 if ($remarks === '') {
+    http_response_code(400);
     echo json_encode(['status'=>'error','message'=>'Remarks is required']);
     exit;
 }
@@ -28,24 +56,30 @@ $stmt_po = $db->prepare("
     SELECT status, closed_po 
     FROM purchase_orders 
     WHERE id = ?
+    FOR UPDATE
 ");
-$stmt_po->bind_param("i", $po_id);
-$stmt_po->execute();
-$po = $stmt_po->get_result()->fetch_assoc();
 
-if (!$po) {
-    echo json_encode(['status'=>'error','message'=>'PO not found']);
-    exit;
-}
-
-if ($po['closed_po'] == 1 || in_array($po['status'], ['RECEIVED','CANCELLED'])) {
-    echo json_encode(['status'=>'error','message'=>'PO already closed']);
+if (!$stmt_po) {
+    http_response_code(500);
+    echo json_encode(['status' => 'error', 'message' => 'Failed to prepare PO check']);
     exit;
 }
 
 $db->begin_transaction();
 
 try {
+
+$stmt_po->bind_param("i", $po_id);
+$stmt_po->execute();
+$po = $stmt_po->get_result()->fetch_assoc();
+
+if (!$po) {
+    throw new Exception('PO not found');
+}
+
+if ($po['closed_po'] == 1 || in_array($po['status'], ['RECEIVED','CANCELLED'])) {
+    throw new Exception('PO already closed');
+}
 
     /* ===============================
        1. INSERT RECEIPT HEADER (with remarks)
@@ -55,9 +89,20 @@ try {
         (po_id, received_date, received_by, branch, status, remarks, created_at)
         VALUES (?, NOW(), ?, ?, 'confirmed', ?, NOW())
     ");
+
+    if (!$stmt) {
+        throw new Exception('Failed to prepare receipt header insert');
+    }
+
     $stmt->bind_param("isss", $po_id, $approver, $branch, $remarks);
-    $stmt->execute();
-    $receipt_id = $stmt->insert_id;
+    if (!$stmt->execute()) {
+        throw new Exception('Failed to insert receipt header');
+    }
+
+    $receipt_id = (int)$stmt->insert_id;
+    if ($receipt_id <= 0) {
+        throw new Exception('Invalid receipt id generated');
+    }
 
     $receipt_no = 'GR-' . date('Ymd') . '-' . $receipt_id;
     $stmt_upd = $db->prepare("
@@ -65,8 +110,15 @@ try {
         SET receipt_no=? 
         WHERE id=?
     ");
+
+    if (!$stmt_upd) {
+        throw new Exception('Failed to prepare receipt number update');
+    }
+
     $stmt_upd->bind_param("si", $receipt_no, $receipt_id);
-    $stmt_upd->execute();
+    if (!$stmt_upd->execute()) {
+        throw new Exception('Failed to update receipt number');
+    }
 
     /* ===============================
        2. INSERT RECEIVED ITEMS (without remarks)
@@ -77,52 +129,84 @@ try {
         VALUES (?, ?, ?, ?, NOW())
     ");
 
+    if (!$stmt_item) {
+        throw new Exception('Failed to prepare receipt item insert');
+    }
+
+    $inserted_count = 0;
+
     foreach ($items as $item) {
-
-        $po_item_id  = (int)$item['po_item_id'];
-        $received_qty = (float)$item['received_qty'];
-
-        if ($received_qty <= 0) continue;
-
-        // get ordered + already received
-        $chk = $db->prepare("
-            SELECT 
-                poi.qty AS ordered_qty,
-                IFNULL(SUM(pri.received_qty),0) AS received_qty
-            FROM purchase_order_items poi
-            LEFT JOIN purchase_receipt_items pri 
-                ON pri.po_item_id = poi.id
-            WHERE poi.id = ?
-            GROUP BY poi.id
-        ");
-        $chk->bind_param("i", $po_item_id);
-        $chk->execute();
-        $bal = $chk->get_result()->fetch_assoc();
-
-        $remaining = $bal['ordered_qty'] - $bal['received_qty'];
-
-        if ($received_qty > $remaining) {
-            throw new Exception("Over-receiving detected.");
+        if (!is_array($item) || !isset($item['po_item_id'], $item['received_qty'])) {
+            throw new Exception('Invalid item payload');
         }
 
-        // fetch price
-        $p = $db->prepare("
-            SELECT unit_price 
-            FROM purchase_order_items 
-            WHERE id=?
+        $po_item_id   = (int)$item['po_item_id'];
+        $received_qty = (float)$item['received_qty'];
+
+        if ($po_item_id <= 0 || $received_qty <= 0) {
+            continue;
+        }
+
+        $item_info_stmt = $db->prepare("
+            SELECT qty, unit_price
+            FROM purchase_order_items
+            WHERE id = ? AND po_id = ?
+            FOR UPDATE
         ");
-        $p->bind_param("i", $po_item_id);
-        $p->execute();
-        $po_data = $p->get_result()->fetch_assoc();
+
+        if (!$item_info_stmt) {
+            throw new Exception('Failed to prepare PO item check');
+        }
+
+        $item_info_stmt->bind_param("ii", $po_item_id, $po_id);
+        $item_info_stmt->execute();
+        $item_info = $item_info_stmt->get_result()->fetch_assoc();
+
+        if (!$item_info) {
+            throw new Exception('PO item does not belong to this PO');
+        }
+
+        $received_sum_stmt = $db->prepare("
+            SELECT IFNULL(SUM(received_qty), 0) AS received_qty
+            FROM purchase_receipt_items
+            WHERE po_item_id = ?
+        ");
+
+        if (!$received_sum_stmt) {
+            throw new Exception('Failed to prepare received quantity check');
+        }
+
+        $received_sum_stmt->bind_param("i", $po_item_id);
+        $received_sum_stmt->execute();
+        $bal = $received_sum_stmt->get_result()->fetch_assoc();
+
+        $ordered_qty = (float)$item_info['qty'];
+        $already_received = (float)($bal['received_qty'] ?? 0);
+        $remaining = $ordered_qty - $already_received;
+
+        if ($received_qty > $remaining) {
+            throw new Exception('Over-receiving detected.');
+        }
+
+        $unit_price = (float)$item_info['unit_price'];
 
         $stmt_item->bind_param(
             "iidd",
             $receipt_id,
             $po_item_id,
             $received_qty,
-            $po_data['unit_price']
+            $unit_price
         );
-        $stmt_item->execute();
+
+        if (!$stmt_item->execute()) {
+            throw new Exception('Failed to insert receipt item');
+        }
+
+        $inserted_count++;
+    }
+
+    if ($inserted_count === 0) {
+        throw new Exception('No valid items to receive');
     }
 
     /* ===============================
@@ -141,11 +225,23 @@ try {
         FROM purchase_order_items
         WHERE po_id = ?
     ");
+
+    if (!$chk_po) {
+        throw new Exception('Failed to prepare PO totals check');
+    }
+
     $chk_po->bind_param("ii", $po_id, $po_id);
     $chk_po->execute();
     $res = $chk_po->get_result()->fetch_assoc();
 
-    if ($res['total_received'] >= $res['total_ordered']) {
+    $total_ordered = (float)($res['total_ordered'] ?? 0);
+    $total_received = (float)($res['total_received'] ?? 0);
+
+    if ($total_ordered <= 0) {
+        throw new Exception('PO has no items');
+    }
+
+    if ($total_received >= $total_ordered) {
         $new_status = 'RECEIVED';
         $closed_po  = 1;
         $closed_by = $approver;
@@ -171,6 +267,11 @@ try {
             updated_by=?
         WHERE id=?
     ");
+
+    if (!$upd_po) {
+        throw new Exception('Failed to prepare PO update');
+    }
+
     $upd_po->bind_param(
         "sisssi",
         $new_status,
@@ -180,7 +281,10 @@ try {
         $approver,
         $po_id
     );
-    $upd_po->execute();
+
+    if (!$upd_po->execute()) {
+        throw new Exception('Failed to update purchase order');
+    }
 
     $db->commit();
 
@@ -192,10 +296,14 @@ try {
         'closed_po'  => $closed_po
     ]);
 
-} catch (Exception $e) {
-    $db->rollback();
+} catch (Throwable $e) {
+    if ($db->errno || $db->in_transaction) {
+        $db->rollback();
+    }
+
+    http_response_code(400);
     echo json_encode([
-        'status'=>'error',
-        'message'=>$e->getMessage()
+        'status' => 'error',
+        'message' => $e->getMessage()
     ]);
 }
