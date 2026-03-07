@@ -5,7 +5,7 @@ $mode = $_POST['params'];
 if($_POST['params'] == 'edit')
 {
 	$rowid = $_POST['rowid'];
-	echo $rowid;
+	$rowid;
 	$QUERY = "SELECT * FROM wms_supplier WHERE id='$rowid'";
 	$result = mysqli_query($db, $QUERY );    
     if ( $result->num_rows > 0 ) 

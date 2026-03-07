@@ -11,10 +11,13 @@ if(!$checkConvTable || $checkConvTable->num_rows == 0)
 		$conversion_table = 'wms_itemlist_converssion';
 	}
 }
+$module_code = isset($_POST['module_code']) && trim($_POST['module_code']) != '' ? trim($_POST['module_code']) : 'Warehouse_Management';
+$module_code_esc = mysqli_real_escape_string($db, $module_code);
+$module_visibility_filter = "(NOT EXISTS (SELECT 1 FROM wms_item_module_visibility mv0 WHERE mv0.item_id = wi.id AND mv0.active=1) OR EXISTS (SELECT 1 FROM wms_item_module_visibility mv1 WHERE mv1.item_id = wi.id AND mv1.module_code='$module_code_esc' AND mv1.active=1))";
 if(isset($_POST['category']) AND !isset($_POST['search']))
 {
 	$category = $_POST['category'];
-	$q = "WHERE category='$category'";
+	$q = "WHERE category='$category' AND $module_visibility_filter";
 } else {
 	if($_POST['limit'] != '')
 	{
@@ -28,25 +31,132 @@ if(isset($_POST['category']) AND !isset($_POST['search']))
 		if($_POST['category'] != '')
 		{
 			$category = $_POST['category'];	
-			$q = "WHERE item_description LIKE '%$search%' OR item_code LIKE '%$search%' OR qr_code LIKE '%$search%' AND  category='$category'";
+			$q = "WHERE (item_description LIKE '%$search%' OR item_code LIKE '%$search%' OR qr_code LIKE '%$search%') AND category='$category' AND $module_visibility_filter";
 		} else {
-			$q = "WHERE item_description LIKE '%$search%' OR item_code LIKE '%$search%' OR qr_code LIKE '%$search%'";
+			$q = "WHERE (item_description LIKE '%$search%' OR item_code LIKE '%$search%' OR qr_code LIKE '%$search%') AND $module_visibility_filter";
 		}		
 	} else {
-		$q = "WHERE active=1 ORDER BY active DESC $limit";
+		$q = "WHERE active=1 AND $module_visibility_filter ORDER BY active DESC $limit";
 	}
 }
 ?>
 <style>
-.table td {
-	padding:2px 5px 2px 5px !important;
+.itemlist-panel {
+	background: #ffffff;
+	border: 1px solid #e5e7eb;
+	border-radius: 10px;
+	padding: 10px;
+	box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+}
+.itemlist-table-wrap {
+	max-height: 68vh;
+	overflow: auto;
+	border-radius: 8px;
+	border: 1px solid #edf0f4;
+}
+.itemlist-table {
+	margin-bottom: 0;
+	font-size: 13px;
+	min-width: 1320px;
+	background: #ffffff;
+}
+.itemlist-table thead th {
+	position: sticky;
+	top: 0;
+	z-index: 2;
+	background: #f8fafc;
+	color: #334155 !important;
+	border-bottom: 1px solid #e2e8f0 !important;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: .02em;
+	white-space: nowrap;
+	padding: 9px 8px !important;
+	vertical-align: middle;
+}
+.itemlist-table tbody td {
+	background: #ffffff;
+	color: #0f172a;
+	padding: 7px 8px !important;
+	vertical-align: middle;
+	border-color: #eff2f6;
+}
+.itemlist-table tbody tr:nth-child(even) td {
+	background: #fcfdff;
+}
+.itemlist-table tbody tr {
+	cursor: pointer;
+	transition: background-color .15s ease;
+}
+.itemlist-table tbody tr:hover td {
+	background: #f4f8ff;
+}
+.item-code {
+	font-weight: 600;
+	color: #0f172a;
+}
+.status-badge {
+	display: inline-block;
+	padding: 2px 10px;
+	border-radius: 999px;
+	font-size: 11px;
+	font-weight: 600;
+	line-height: 1.4;
+	min-width: 80px;
+	text-align: center;
+}
+.status-active {
+	background: #e8f8ef;
+	color: #107a3f;
+	border: 1px solid #c4ebd5;
+}
+.status-inactive {
+	background: #fff0f0;
+	color: #a11b1b;
+	border: 1px solid #ffd4d4;
+}
+.btn-edit-item {
+	width: 100%;
+	font-size: 12px;
+	font-weight: 600;
+	padding: 4px 10px;
+	border-radius: 6px;
+	border: 1px solid #f5c46a;
+	background: #fff8e7;
+	color: #7a5200;
+}
+.btn-edit-item:hover {
+	background: #ffefc6;
+}
+.empty-state {
+	padding: 24px 8px !important;
+	text-align: center;
+	color: #64748b;
+	font-size: 13px;
+}
+.col-center {
+	text-align: center;
+}
+.col-right {
+	text-align: right;
+	padding-right: 14px !important;
+}
+.itemlist-table-wrap::-webkit-scrollbar {
+	height: 10px;
+	width: 10px;
+}
+.itemlist-table-wrap::-webkit-scrollbar-thumb {
+	background: #cbd5e1;
+	border-radius: 10px;
 }
 </style>
-<table style="width: 100%" class="table table-bordered table-striped table-hover">
+
+<div class="itemlist-panel">
+<div class="itemlist-table-wrap">
+<table style="width: 100%" class="table table-bordered table-hover itemlist-table">
 	<thead>
 		<tr>
-			<th style="width:50px;text-align:center">#</th>
-			<th>SUPP. ID</th>
+			<th class="col-center" style="width:50px;">#</th>
 			<th>RECIPIENT</th>
 			<th>ITEM LOCATION</th>
 			<th>ITEM CODE</th>
@@ -83,45 +193,46 @@ if(isset($_POST['category']) AND !isset($_POST['search']))
 			if($ITEMSROW['active'] == 1)
 			{
 				$status = "Active";
-				$tdcolor = 'class="color-green"';
+				$status_class = 'status-active';
 			} else {
 				$status = "In-Active";
-				$tdcolor = 'class="color-red"';
+				$status_class = 'status-inactive';
 			}
 			if($ITEMSROW['date_added'] != '')
 			{
-				$date_added = date("F m, Y @h:i A");
+				$date_added = date("F d, Y @h:i A", strtotime($ITEMSROW['date_added']));
 			} else {
 				$date_added = "--|--";
 			}
 ?>
 		<tr ondblclick="itemlistFormEdit('edit','<?php echo $rowid; ?>')">
-			<td style="text-align:center"><?php echo $sp;?></td>			
-			<td style="text-align:center"><?php echo $ITEMSROW['supplier_id'];?></td>
-			<td style="text-align:center"><?php echo $ITEMSROW['recipient'];?></td>
-			<td style="text-align:center"><?php echo $ITEMSROW['item_location'];?></td>
-			<td style="text-align:center"><?php echo $ITEMSROW['item_code'];?></td>
-			<td><?php echo $ITEMSROW['category'];?></td>
-			<td><?php echo $item_description;?></td>			
-			<td style="text-align:right;padding-right:20px;"><?php echo $ITEMSROW['unit_price'];?></td>
-			<td><?php echo $ITEMSROW['uom'];?></td>
+			<td class="col-center"><?php echo $sp;?></td>			
+			<td class="col-center"><?php echo htmlspecialchars((string)$ITEMSROW['recipient']);?></td>
+			<td class="col-center"><?php echo htmlspecialchars((string)$ITEMSROW['item_location']);?></td>
+			<td class="col-center item-code"><?php echo htmlspecialchars((string)$ITEMSROW['item_code']);?></td>
+			<td><?php echo htmlspecialchars((string)$ITEMSROW['category']);?></td>
+			<td title="<?php echo htmlspecialchars((string)$ITEMSROW['item_description']); ?>"><?php echo htmlspecialchars((string)$item_description);?></td>			
+			<td class="col-right"><?php echo number_format((float)$ITEMSROW['unit_price'], 2);?></td>
+			<td><?php echo htmlspecialchars((string)$ITEMSROW['uom']);?></td>
 			<td><?php echo $conv_text;?></td>
-			<td><?php echo $ITEMSROW['added_by'];?></td>
-			<td><?php echo $date_added;?></td>
-			<td style="text-align:center" <?php echo $tdcolor; ?>><?php echo $status;?></td>
-			<td style="text-align:center"><?php echo $ITEMSROW['average_leadtime'];?></td>
-			<td style="text-align:center"><?php echo $ITEMSROW['max_leadtime'];?></td>
+			<td><?php echo htmlspecialchars((string)$ITEMSROW['added_by']);?></td>
+			<td><?php echo htmlspecialchars((string)$date_added);?></td>
+			<td class="col-center"><span class="status-badge <?php echo $status_class; ?>"><?php echo $status;?></span></td>
+			<td class="col-center"><?php echo htmlspecialchars((string)$ITEMSROW['average_leadtime']);?></td>
+			<td class="col-center"><?php echo htmlspecialchars((string)$ITEMSROW['max_leadtime']);?></td>
 			<td>
-				<div class="change-btn btn-warning w-100" onclick="itemlistFormEdit('edit','<?php echo $rowid; ?>')">Edit</div>
+				<button type="button" class="btn-edit-item" onclick="itemlistFormEdit('edit','<?php echo $rowid; ?>')">Edit</button>
 			</td>
 		</tr>
 <?PHP 	} } else { ?>
 		<tr>
-			<td colspan="15" style="text-align:center"><i class="fa fa-bell"></i>&nbsp;&nbsp;No Records</td>
+			<td colspan="15" class="empty-state"><i class="fa fa-bell"></i>&nbsp;&nbsp;No records found</td>
 		</tr>
 <?PHP } ?>		
 	</tbody>		
 </table>
+</div>
+</div>
 <script>
 function itemlistFormEdit(params,rowid)
 {

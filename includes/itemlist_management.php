@@ -11,42 +11,126 @@ if(isset($_SESSION['WMS_SHOW_LIMIT']))
 }
 ?>
 <style>
-.smnav-header input[type=text] {width:100%;padding-left: 25px;padding-right:27px}
-.smnav-header select {margin-left: 10px;width:270px;}
-.reload-data {display: flex;gap: 15px;margin-left: auto;right:0;}
-.right-actions {display:flex;align-items:center;gap:10px;margin-left:auto;}
-.search-shell {position: relative;margin-left:10px;width:270px;}
-.search-magnifying {position:absolute;top:3px;margin-left:5px;}
-.search-xmark {position:absolute;top: 1px;right: 5px;font-size:20px;cursor: pointer;}
-.search-xmark:hover {color: red;}
-.tableFixHead {margin-top:15px;background:#fff;}
-.tableFixHead  { overflow: auto; height: calc(100vh - 222px); width:100% }
-.tableFixHead thead th { position: sticky; top: 0; z-index: 1; background:#0cccae; color:#fff }
-.tableFixHead table  { border-collapse: collapse;}
-.tableFixHead th, .tableFixHead td { font-size:14px; white-space:nowrap } 
+.itemlist-page {
+	background:#fff;
+	border:1px solid #e5e7eb;
+	border-radius:10px;
+	padding:12px;
+	box-shadow:0 2px 8px rgba(15, 23, 42, 0.04);
+}
+.smnav-header {
+	display:flex;
+	align-items:center;
+	gap:8px;
+	flex-wrap:wrap;
+	margin-bottom:10px;
+}
+.smnav-header input[type=text] {
+	width:100%;
+	padding-left:28px;
+	padding-right:30px;
+	height:32px;
+}
+.smnav-header select {
+	width:240px;
+	height:32px;
+}
+.action-group {
+	display:flex;
+	align-items:center;
+	gap:8px;
+}
+.right-actions {
+	display:flex;
+	align-items:center;
+	gap:10px;
+	margin-left:auto;
+	flex-wrap:wrap;
+}
+.reload-data {
+	display:flex;
+	align-items:center;
+	gap:8px;
+	margin-left:6px;
+}
+.reload-label {
+	font-size:12px;
+	color:#475569;
+	font-weight:600;
+}
+.search-shell {
+	position:relative;
+	width:300px;
+}
+.search-magnifying {
+	position:absolute;
+	left:9px;
+	top:8px;
+	color:#64748b;
+	font-size:13px;
+}
+.search-xmark {
+	position:absolute;
+	top:5px;
+	right:8px;
+	font-size:17px;
+	cursor:pointer;
+	color:#94a3b8;
+}
+.search-xmark:hover {color:#ef4444;}
+.btn-soft {
+	border:1px solid #cbd5e1;
+	background:#f8fafc;
+	color:#334155;
+}
+.btn-soft:hover {
+	background:#eef2f7;
+}
+.tableFixHead {
+	margin-top:10px;
+	background:#fff;
+	border:1px solid #e5e7eb;
+	border-radius:8px;
+	overflow:auto;
+	height:calc(100vh - 255px);
+	width:100%;
+}
+.tableFixHead table {border-collapse:collapse;}
+.tableFixHead th, .tableFixHead td {font-size:14px;white-space:nowrap;}
+.loading-shell {
+	padding:18px;
+	color:#475569;
+	font-size:13px;
+}
 </style>
-<div class="smnav-header">
-	<button class="btn btn-primary btn-sm" onclick="itemsForm('add')">Add Item</button>
-	<button class="btn btn-success btn-sm" onclick="reload_data()">Reload Item Lists</button>
-	<div class="search-shell">
-		<input id="search" type="text" class="form-control form-control-sm" placeholder="Search Items/Products">	
-		<i class="fa-sharp fa-solid fa-magnifying-glass search-magnifying"></i>
-		<i class="fa-solid fa-circle-xmark search-xmark" onclick="clearSearch()"></i>
-	</div>
-	<select id="category" class="form-control form-control-sm" onchange="selectCategory(this.value)">
-		<?php echo $function->GetItemCategory('',$db)?>
-	</select>
-	<span class="right-actions">
-		<button class="btn btn-info btn-sm" onclick="openStoreAppItemMapping()">StoreApp Item Mapping</button>
-		<span class="reload-data">
-		<span style="margin-left:20px;margin-top:4px;">Show</span>
-		<select id="limit" style="width:70px" class="form-control form-control-sm" onchange="load_data()">
-			<?php echo $function->GetRowLimit($show_limit); ?>
+<div class="itemlist-page">
+	<div class="smnav-header">
+		<div class="action-group">
+			<button class="btn btn-primary btn-sm" onclick="itemsForm('add')"><i class="fa fa-plus"></i>&nbsp;Add Item</button>
+			<button class="btn btn-soft btn-sm" onclick="reload_data()"><i class="fa fa-rotate"></i>&nbsp;Reload</button>
+		</div>
+		<div class="search-shell">
+			<input id="search" type="text" class="form-control form-control-sm" placeholder="Search items or item code">
+			<i class="fa-sharp fa-solid fa-magnifying-glass search-magnifying"></i>
+			<i class="fa-solid fa-circle-xmark search-xmark" onclick="clearSearch()"></i>
+		</div>
+		<select id="category" class="form-control form-control-sm" onchange="selectCategory(this.value)">
+			<?php echo $function->GetItemCategory('',$db)?>
 		</select>
+		<span class="right-actions">
+			<button class="btn btn-info btn-sm" onclick="openStoreAppItemMapping()"><i class="fa fa-link"></i>&nbsp;StoreApp Mapping</button>
+			<span class="reload-data">
+				<span class="reload-label">Show</span>
+				<select id="limit" style="width:80px" class="form-control form-control-sm" onchange="load_data()">
+					<?php echo $function->GetRowLimit($show_limit); ?>
+				</select>
+			</span>
 		</span>
-	</span>
+	</div>
+	<div class="tableFixHead" id="smnavdata">
+		<div class="loading-shell">Loading data... <i class="fa fa-spinner fa-spin"></i></div>
+	</div>
 </div>
-<div class="tableFixHead" id="smnavdata">Loading... <i class="fa fa-spinner fa-spin"></i></div>
 
 <script>
 function selectCategory(category)

@@ -65,7 +65,80 @@ $stmt->execute();
 $result = $stmt->get_result();
 ?>
 
-<table class="table table-bordered table-striped" id="potable">
+<style>
+.gr-table {
+    margin-bottom: 0;
+    font-size: 13px;
+    min-width: 1120px;
+}
+.gr-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: #f8fafc;
+    color: #334155;
+    text-transform: uppercase;
+    letter-spacing: .02em;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 10px 8px !important;
+    border-bottom: 1px solid #e2e8f0 !important;
+    white-space: nowrap;
+}
+.gr-table tbody td {
+    padding: 8px 8px !important;
+    vertical-align: middle;
+    color: #0f172a;
+    border-color: #eef2f6;
+    background: #fff;
+}
+.gr-table tbody tr:nth-child(even) td {
+    background: #fcfdff;
+}
+.gr-table tbody tr:hover td {
+    background: #f4f8ff;
+}
+.gr-po-number {
+    font-weight: 700;
+    color: #0f172a;
+}
+.gr-num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+.gr-status-pill {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.4;
+    text-transform: capitalize;
+    white-space: nowrap;
+}
+.gr-status-approved {background:#e9f4ff;color:#0f4d85;border:1px solid #cbe4ff;}
+.gr-status-partial_received {background:#fff7e6;color:#8a5a00;border:1px solid #ffe1a8;}
+.gr-status-received {background:#e8f8ef;color:#107a3f;border:1px solid #c4ebd5;}
+.gr-status-cancelled {background:#fff0f0;color:#a11b1b;border:1px solid #ffd4d4;}
+.btn-view-gr {
+    padding: 3px 9px;
+    font-size: 12px;
+    font-weight: 600;
+    border-radius: 6px;
+    border: 1px solid #bfd7ff;
+    background: #edf4ff;
+    color: #0f4d85;
+}
+.btn-view-gr:hover { background: #dceaff; }
+.gr-empty {
+    text-align: center;
+    color: #64748b;
+    font-size: 13px;
+    padding: 22px 8px !important;
+}
+</style>
+
+<table class="table table-bordered gr-table" id="potable">
 <thead>
 <tr>
     <th>#</th>
@@ -99,18 +172,21 @@ while($row = $result->fetch_assoc()):
 <tr>
     <td><?= $i ?></td>
     <td><?= htmlspecialchars($row['pr_number']) ?></td>
-    <td><?= htmlspecialchars($row['po_number']) ?></td>
+    <td class="gr-po-number"><?= htmlspecialchars($row['po_number']) ?></td>
     <td><?= htmlspecialchars($row['supplier_name']) ?></td>
     <td><?= htmlspecialchars($row['order_date']) ?></td>
     <td><?= htmlspecialchars($row['expected_delivery']) ?></td>
-    <td><?= htmlspecialchars($row['total_ordered']) ?></td>
-    <td><?= htmlspecialchars($row['total_received']) ?></td>
-    <td><?= htmlspecialchars($row['balance']) ?></td>
-    <td><?= ucfirst(str_replace('_',' ',$row['status'])) ?></td>
+    <td class="gr-num"><?= number_format((float)$row['total_ordered'], 2) ?></td>
+    <td class="gr-num"><?= number_format((float)$row['total_received'], 2) ?></td>
+    <td class="gr-num"><strong><?= number_format((float)$row['balance'], 2) ?></strong></td>
     <td>
-        <button class="btn btn-primary btn-sm w-100"
-            onclick="viewgr('<?= $row['id'] ?>','<?= $row['pr_number'] ?>','<?= $row['po_number'] ?>','<?= $row['supplier_name']?>','<?= $row['status'] ?>')">
-            View
+        <?php $statusKey = strtolower((string)$row['status']); ?>
+        <span class="gr-status-pill gr-status-<?= htmlspecialchars($statusKey) ?>"><?= ucwords(str_replace('_',' ',$statusKey)) ?></span>
+    </td>
+    <td>
+        <button type="button" class="btn-view-gr w-100"
+            onclick='viewgr(<?= (int)$row['id'] ?>, <?= json_encode($row['pr_number']) ?>, <?= json_encode($row['po_number']) ?>, <?= json_encode($row['supplier_name']) ?>, <?= json_encode($row['status']) ?>)'>
+            <i class="fa-solid fa-eye"></i> View
         </button>
     </td>
 </tr>
@@ -118,7 +194,7 @@ while($row = $result->fetch_assoc()):
 
 <?php if($result->num_rows === 0): ?>
 <tr>
-    <td colspan="11" class="text-center text-muted">
+    <td colspan="11" class="gr-empty">
         <i class="fa fa-info-circle"></i> No goods received found.
     </td>
 </tr>
