@@ -71,7 +71,13 @@ if(isset($_POST['search']) && $_POST['search'])
 	</thead>
 	<tbody>
 <?php
-	$queryItems = "SELECT * FROM wms_itemlist $q $limit";
+	if($q != '')
+	{
+		$q .= " AND active=1 AND item_code != ''";
+	} else {
+		$q = "WHERE active=1 AND item_code != ''";
+	}
+	$queryItems = "SELECT * FROM wms_itemlist $q ORDER BY item_description ASC $limit";
 	$resultsItems = $db->query($queryItems);			
 	if ( $resultsItems->num_rows > 0 ) 
     {	
@@ -146,13 +152,19 @@ function undoPcount(elemid)
 function savePcount(elemid)
 {
 	const cellA = document.getElementById('pcountvalue' + elemid);
-    const valueA = cellA.textContent;
+	const valueA = (cellA.textContent || '').trim();
     var mode = 'saveinvsetup';
 	var trans_date = '<?php echo $trans_date; ?>';
 	var itemcode = $('#itemcode' + elemid).val();
 	var category = $('#category' + elemid).val();
 	var itemname = $('#itemname' + elemid).val();
-	var phycount = valueA;
+	var normalized = valueA.replace(/,/g, '');
+	var numericPcount = parseFloat(normalized);
+	if (isNaN(numericPcount) || numericPcount < 0) {
+		swal("Invalid Physical Count", "Please enter a valid non-negative number.", "warning");
+		return false;
+	}
+	var phycount = numericPcount;
 	var uom = $('#uom' + elemid).val();
 	rms_reloaderOn("Updating...");
 	$.post("./Modules/Warehouse_Management/actions/actions.php",
@@ -167,6 +179,7 @@ function savePcount(elemid)
 	},
 	function(data) {		
 		$('#results').html(data);
+		cellA.textContent = numericPcount.toFixed(2);
 		rms_reloaderOff();
 	});
 }

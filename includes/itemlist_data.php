@@ -14,31 +14,36 @@ if(!$checkConvTable || $checkConvTable->num_rows == 0)
 $module_code = isset($_POST['module_code']) && trim($_POST['module_code']) != '' ? trim($_POST['module_code']) : 'Warehouse_Management';
 $module_code_esc = mysqli_real_escape_string($db, $module_code);
 $module_visibility_filter = "(NOT EXISTS (SELECT 1 FROM wms_item_module_visibility mv0 WHERE mv0.item_id = wi.id AND mv0.active=1) OR EXISTS (SELECT 1 FROM wms_item_module_visibility mv1 WHERE mv1.item_id = wi.id AND mv1.module_code='$module_code_esc' AND mv1.active=1))";
-if(isset($_POST['category']) AND !isset($_POST['search']))
+$limitValue = isset($_POST['limit']) ? (int)$_POST['limit'] : 0;
+$limitSql = $limitValue > 0 ? " LIMIT $limitValue" : "";
+
+$search = isset($_POST['search']) ? trim((string)$_POST['search']) : '';
+$category = isset($_POST['category']) ? trim((string)$_POST['category']) : '';
+$recipient = isset($_POST['recipient']) ? trim((string)$_POST['recipient']) : '';
+
+$whereParts = array();
+$whereParts[] = "wi.active=1";
+$whereParts[] = $module_visibility_filter;
+
+if($category !== '')
 {
-	$category = $_POST['category'];
-	$q = "WHERE category='$category' AND $module_visibility_filter";
-} else {
-	if($_POST['limit'] != '')
-	{
-		$limit = "LIMIT ".$_POST['limit'];
-	} else {
-		$limit = "";
-	}
-	if(isset($_POST['search']))
-	{
-		$search = $_POST['search'];	
-		if($_POST['category'] != '')
-		{
-			$category = $_POST['category'];	
-			$q = "WHERE (item_description LIKE '%$search%' OR item_code LIKE '%$search%' OR qr_code LIKE '%$search%') AND category='$category' AND $module_visibility_filter";
-		} else {
-			$q = "WHERE (item_description LIKE '%$search%' OR item_code LIKE '%$search%' OR qr_code LIKE '%$search%') AND $module_visibility_filter";
-		}		
-	} else {
-		$q = "WHERE active=1 AND $module_visibility_filter ORDER BY active DESC $limit";
-	}
+	$categoryEsc = mysqli_real_escape_string($db, $category);
+	$whereParts[] = "wi.category='$categoryEsc'";
 }
+
+if($recipient !== '')
+{
+	$recipientEsc = mysqli_real_escape_string($db, $recipient);
+	$whereParts[] = "wi.recipient='$recipientEsc'";
+}
+
+if($search !== '')
+{
+	$searchEsc = mysqli_real_escape_string($db, $search);
+	$whereParts[] = "(wi.item_description LIKE '%$searchEsc%' OR wi.item_code LIKE '%$searchEsc%' OR wi.qr_code LIKE '%$searchEsc%')";
+}
+
+$q = "WHERE ".implode(' AND ', $whereParts)." ORDER BY wi.active DESC, wi.item_description ASC".$limitSql;
 ?>
 <style>
 .itemlist-panel {

@@ -668,7 +668,6 @@ if($mode == 'undopcount')
 	$itemcode = $_POST['itemcode'];
 	$elemid = $_POST['elemid'];
 	$sqlQueryStk = "SELECT * FROM wms_inventory_stock WHERE item_code='$itemcode' AND stock_before_pcount_date='$transdate'";
-	echo $sqlQueryStk;
     $stkResults = mysqli_query($db, $sqlQueryStk);
     if ($stkResults->num_rows > 0)
     {
@@ -705,10 +704,22 @@ if($mode == 'saveinvsetup')
 {
 	$transdate = $_POST['trans_date'];
 	$category = $_POST['category'];
-	$itemcode = $_POST['itemcode'];
+	$itemcode = trim((string)$_POST['itemcode']);
 	$itemname = $_POST['itemname'];
-	$phycount = $_POST['phycount'];
+	$phycountRaw = isset($_POST['phycount']) ? trim((string)$_POST['phycount']) : '0';
+	$phycountRaw = str_replace(',', '', $phycountRaw);
+	$phycount = (is_numeric($phycountRaw) && (float)$phycountRaw >= 0) ? (float)$phycountRaw : 0;
 	$uom = $_POST['uom'];
+
+	if($itemcode === '')
+	{
+		print_r('        
+			<script>
+				swal("Invalid Item", "Item code is required.", "warning");
+			</script>
+		');
+		exit;
+	}
 
 	$query = "SELECT * FROM wms_inventory_pcount WHERE trans_date='$transdate' AND item_code='$itemcode'";
 	$results = $db->query($query);			
@@ -736,6 +747,20 @@ if($mode == 'saveinvsetup')
 }
 function executeInventory($itemcode,$category,$itemname,$uom,$function,$phycount,$date_time,$date,$app_user,$db)
 {
+	$itemcode = trim((string)$itemcode);
+	if($itemcode === '')
+	{
+		echo '<script>swal("Invalid Item", "Unable to update stock: blank item code.", "warning");</script>';
+		return;
+	}
+
+	$checkItem = mysqli_query($db, "SELECT id FROM wms_itemlist WHERE item_code='".mysqli_real_escape_string($db, $itemcode)."' AND active=1 LIMIT 1");
+	if(!$checkItem || $checkItem->num_rows === 0)
+	{
+		echo '<script>swal("Invalid Item", "Unable to update stock: item is not active or not found.", "warning");</script>';
+		return;
+	}
+
 	$supplier_id = $function->GetItemInfo('supplier_id',$itemcode,$db);
 	
 	$sqlQueryStk = "SELECT * FROM wms_inventory_stock WHERE item_code='$itemcode'";
@@ -836,11 +861,19 @@ if($mode == 'saveremarks')
 if($mode == 'savepcount')
 {
 	$transdate = $_POST['transdate'];
-	$itemcode = $_POST['itemcode'];
+	$itemcode = trim((string)$_POST['itemcode']);
 	$itemname = $_POST['itemname'];
 	$category = $_POST['category'];
-	$phycount = $_POST['phycount'];
+	$phycountRaw = isset($_POST['phycount']) ? trim((string)$_POST['phycount']) : '0';
+	$phycountRaw = str_replace(',', '', $phycountRaw);
+	$phycount = (is_numeric($phycountRaw) && (float)$phycountRaw >= 0) ? (float)$phycountRaw : 0;
 	
+	if($itemcode === '')
+	{
+		echo '<script>swal("Invalid Item", "Item code is required.", "warning");</script>';
+		exit;
+	}
+
 	$query = "SELECT * FROM wms_inventory_pcount WHERE trans_date='$transdate' AND item_code='$itemcode'";
 	$results = $db->query($query);			
     if($results->num_rows > 0)

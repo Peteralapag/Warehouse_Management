@@ -53,7 +53,7 @@ if($current_store_item_id != '')
 			<th>STORE ITEMS</th>
 			<td>
 				<input id="map_store_item_id" type="hidden" value="<?php echo $current_store_item_id; ?>">
-				<input id="map_store_item_name" type="text" class="form-control" value="<?php echo htmlspecialchars($current_store_item_name, ENT_QUOTES); ?>" placeholder="Type product name or IDCODE..." autocomplete="off" onkeyup="searchStoreItems(this.value)">
+				<input id="map_store_item_name" type="text" class="form-control" value="<?php echo htmlspecialchars($current_store_item_name, ENT_QUOTES); ?>" placeholder="Type product name, ID, item code, or SKU..." autocomplete="off" onkeyup="searchStoreItems(this.value)">
 				<div id="store_items_result" class="store-search-results"></div>
 			</td>
 		</tr>

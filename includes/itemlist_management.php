@@ -133,12 +133,15 @@ if(isset($_SESSION['WMS_SHOW_LIMIT']))
 </div>
 
 <script>
+window.WMS_ITEM_MASTER_MODULE_CODE = window.WMS_ITEM_MASTER_MODULE_CODE || 'Warehouse_Management';
+var ITEM_MASTER_MODULE_CODE = window.WMS_ITEM_MASTER_MODULE_CODE;
+
 function selectCategory(category)
 {
 	var limit = '';
 	if(category != '')
 	{
-		$.post("./Modules/Warehouse_Management/includes/itemlist_data.php", { limit: limit, category: category},
+		$.post("./Modules/Warehouse_Management/includes/itemlist_data.php", { limit: limit, category: category, module_code: ITEM_MASTER_MODULE_CODE },
 		function(data) {		
 			$('#smnavdata').html(data);
 		});
@@ -169,7 +172,7 @@ $(function()
 			var search = $('#search').val();
 			var category = '';
 		}		
-		$.post("./Modules/Warehouse_Management/includes/itemlist_data.php", { limit: limit, search: search, category: category },
+		$.post("./Modules/Warehouse_Management/includes/itemlist_data.php", { limit: limit, search: search, category: category, module_code: ITEM_MASTER_MODULE_CODE },
 		function(data) {
 			$('#smnavdata').html(data);
 		});
@@ -190,7 +193,7 @@ function load_data()
 {
 	var limit = $('#limit').val();
 	rms_reloaderOn("Loading data...");
-	$.post("./Modules/Warehouse_Management/includes/itemlist_data.php", { limit: limit },
+	$.post("./Modules/Warehouse_Management/includes/itemlist_data.php", { limit: limit, module_code: ITEM_MASTER_MODULE_CODE },
 	function(data) {
 		$('#smnavdata').html(data);
 		rms_reloaderOff();

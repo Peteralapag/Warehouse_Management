@@ -23,6 +23,22 @@ if(isset($_SESSION['wms_userlevel']))
 	bottom: 2px;
 	margin-left:3px;
 	width: 98%;
+	display:flex;
+	gap:6px;
+}
+.nav-bottom-btn .btn {
+	font-size:12px;
+	white-space:nowrap;
+}
+.btn-masterdata {
+	background:#0f766e;
+	color:#fff;
+	border-color:#0f766e;
+}
+.btn-masterdata:hover {
+	background:#0d5f59;
+	color:#fff;
+	border-color:#0d5f59;
 }
 </style>
 <ul class="sidebar-nav">
@@ -43,6 +59,21 @@ if ( $MenuResults->num_rows > 0 )
 </ul>
 <div id="resultsdata"></div>
 <div class="btn-group nav-bottom-btn" role="group" aria-label="Ronan Sarbon">
+<?php
+// Check tbl_system_permission for master data privilege
+$showMasterData = false;
+if(isset($_SESSION['wms_appnameuser'])) {
+	$user = $_SESSION['wms_appnameuser'];
+	$sql = "SELECT * FROM tbl_system_permission WHERE username='".$db->real_escape_string($user)."' LIMIT 1";
+	$result = $db->query($sql);
+	if($result && $result->num_rows > 0) {
+		$showMasterData = true;
+	}
+}
+if($showMasterData) {
+?>
+   <button class="btn btn-masterdata" onclick="openMasterDataManagement()">Master Data Management <i class="fa-solid fa-database"></i></button>
+<?php } ?>
 	<button class="btn btn-secondary" onclick="wmsSettings()">Settings <i class="fa-solid fa-gear"></i></button>
 	<button class="btn btn-danger" onclick="closeApps()">Exit Application <i class="fa-solid fa-right-from-bracket"></i></button>
 </div>
@@ -50,7 +81,7 @@ if ( $MenuResults->num_rows > 0 )
 function wmsSettings()
 {
 	var user_level = '<?php echo $user_level; ?>';
-	if(user_level => 80)
+	if(user_level >= 80)
 	{
 		$.post("./Modules/Warehouse_Management/pages/wms_settings.php", { },
 		function(data) {
@@ -58,6 +89,21 @@ function wmsSettings()
 		});
 	} else {
 		
+	}
+}
+function openMasterDataManagement()
+{
+	var user_level = '<?php echo $user_level; ?>';
+	if(user_level >= 80)
+	{
+		$.post("./Modules/Warehouse_Management/includes/item_masterlist_settings.php", { },
+		function(data) {
+			$('#contents').html(data);
+		});
+	}
+	else
+	{
+		swal("Access Denied", "Only authorized analysts can modify master data settings.", "warning");
 	}
 }
 function openMenuGranted(page)

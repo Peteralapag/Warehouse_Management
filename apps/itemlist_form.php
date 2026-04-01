@@ -90,7 +90,7 @@ if($_POST['params'] == 'edit')
 			}
 			if($ROW['date_added'] != '')
 			{
-				$date_added = date("F m, Y @h:i A");
+				$date_added = date("F d, Y @h:i A", strtotime($ROW['date_added']));
 			} else {
 				$date_added = "--|--";
 			}
@@ -239,7 +239,7 @@ if($_POST['params'] == 'add')
 		<tr>
 			<th>Item Code</th>
 			<td>
-				<input id="item_code" type="text" class="form-control" value="<?php echo $item_code; ?>">				
+				<input id="item_code" type="text" class="form-control" value="<?php echo $item_code; ?>" <?php echo ($mode == 'edit' ? 'readonly' : ''); ?>>				
 			</td>
 		</tr>
 		<tr>
@@ -296,7 +296,7 @@ if($_POST['params'] == 'add')
 		</tr>
 		<tr>
 			<th>Item Description</th>
-			<td><input id="item_description" type="text" class="form-control" value="<?php echo $item_description; ?>"></td>
+			<td><textarea id="item_description" class="form-control" rows="2"><?php echo htmlspecialchars($item_description, ENT_QUOTES); ?></textarea></td>
 		</tr>
 		<tr>
 			<th>Units of Measure</th>
@@ -552,7 +552,6 @@ function validateForm()
 	var shelf_life_days = $('#shelf_life_days').val();
 	var is_lot_tracked = $('#is_lot_tracked').is(":checked") ? 1 : 0;
 	var is_serial_tracked = $('#is_serial_tracked').is(":checked") ? 1 : 0;
-	var active = $('#active').val();
 	if(recipient === '')
 	{
 		app_alert("Recipient","Please select Recipient","warning","Ok","recipient","focus");
@@ -571,7 +570,7 @@ function validateForm()
 	}
 	if(category == '')
 	{
-		app_alert("Category","Please select Categorya","warning","Ok","category","focus");
+		app_alert("Category","Please select Category","warning","Ok","categories","focus");
 		return false;
 	}
 	if(classification == '')

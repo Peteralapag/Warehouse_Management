@@ -31,6 +31,7 @@ $(function()
 function PushLogin()
 {
 	var mode = 'c10cc6b684e1417e8ffa924de1e58373';
+	var csrf = '<?php echo isset($_SESSION["csrf_token"]) ? htmlspecialchars($_SESSION["csrf_token"], ENT_QUOTES, "UTF-8") : ""; ?>';
 	var usr = $('#uname').val();
 	var psw = $('#upass').val();
 	if(usr == '')
@@ -47,7 +48,7 @@ function PushLogin()
 	$('#submitlogin').attr('disabled', true);
  	setTimeout(function()
  	{
-	 	$.post("./Modules/Warehouse_Management/actions/login_process.php", { mode: mode, username: usr, password: psw },
+	 	$.post("./Modules/Warehouse_Management/actions/login_process.php", { mode: mode, username: usr, password: psw, csrf_token: csrf },
 		function(data) {
 			$('.loginresults').html(data);
 			$('#submitlogin').html('Sign In');
